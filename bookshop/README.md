@@ -1,4 +1,4 @@
-# crud-app
+# bookshop
 
 ## Project setup
 ```
