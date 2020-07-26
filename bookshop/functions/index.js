@@ -8,7 +8,17 @@ const neatCsv = require('neat-csv');
 const csvtojson = require("csvtojson")
 var books = require('google-books-search');
 const {google} = require('googleapis');
+const fs = require('fs');
+var array = require('lodash/array');
+const db = admin.firestore();
+db.settings({ ignoreUndefinedProperties: true })
 
+// const {Translate} = require('@google-cloud/translate').v2;
+
+const runtimeOpts = {
+    timeoutSeconds: 300,
+    memory: '128MB'
+  }
 
 // [END import]
 
@@ -18,7 +28,7 @@ const {google} = require('googleapis');
  * ImageMagick.
  */
 // exports.uploadBooks = functions.storage.object().onFinalize(async (object) => {
-exports.uploadBooks = functions.https.onRequest(async (req, res) => {
+exports.uploadBooks = functions.runWith(runtimeOpts).https.onRequest(async (req, res) => {
 //   // [START eventAttributes]
 //   const fileBucket = object.bucket; // The Storage bucket that contains the file.
 //   const filePath = object.name; // File path in the bucket.
@@ -41,13 +51,25 @@ const extractFields = [
 ];
 
 parsedData = []
-var data = await csvtojson().fromFile('./BookBuddy.csv');
-for(let i of data){
-    var temp = {}
-    extractFields.map(nm => { 
-        temp[nm] = i[nm];      
-    })
-    parsedData.push(temp)
+data = []
+const dir = './rawfilesBookBuddy'
+const files = fs.readdirSync(dir)
+
+for (file of files) {
+    var tempData = await csvtojson().fromFile(path.join(dir, file));
+    data.push(...tempData)
+    for(let i of tempData) {
+        var temp = {}
+        extractFields.map(nm => {
+            temp[nm] = i[nm];
+        })
+        parsedData.push(temp)
+    }
+}
+parsedData = array.uniqBy(parsedData, 'Date Added')
+
+for(let i of data) {
+    addtocollection("rawData", i, i['Date Added'])
 }
 
 const booksapi = google.books({
@@ -55,14 +77,45 @@ const booksapi = google.books({
     auth: "AIzaSyBSbWl6-e2C7eNJZ_p-JmStcTTKaPrhY00", // specify your API key here
 });
 
-const translateapi = google.translate({
-    version: 'v2',
-    auth: "AIzaSyBSbWl6-e2C7eNJZ_p-JmStcTTKaPrhY00", // specify your API key here
-});
+// const translate = new Translate();
+
+// async function translateText(text, target) {
+//     // Translates the text into the target language. "text" can be a string for
+//     // translating a single piece of text, or an array of strings for translating
+//     // multiple texts.
+//     let [translations] = await translate.translate(text, target);
+//     translations = Array.isArray(translations) ? translations : [translations];
+//     console.log('Translations:');
+//     translations.forEach((translation, i) => {
+//       console.log(`${text[i]} => (${target}) ${translation}`);
+//     });
+//   }
+
+
+function addtocollection(collection, item, key) {
+    var docRef = db.collection(collection).doc(key);
+
+    docRef.get().then(function(doc) {
+        if (doc.exists) {
+            if (collection === 'inStock') {
+                db.collection(collection).doc(key).update({
+                    count: doc.data().count + 1
+                })
+            }
+        } else {
+            // doc.data() will be undefined in this case
+            db.collection(collection).doc(key).set(item).then(function() {
+                console.log("Document successfully written!");
+            });
+        }
+    }).catch(function(error) {
+        console.log("Error getting document:", error);
+    });
+}
 
 remaining = []
 collection = []
-for(let i of parsedData) {
+for(let i of parsedData.slice(0, 80)) {
     console.log(i['ISBN'])
     const gresp = await booksapi.volumes.list({q: i['ISBN'], printType: 'books', langRestrict: 'hi'});
 
@@ -70,27 +123,31 @@ for(let i of parsedData) {
         console.log("REMAINING")
         data.filter(function (_,n){
             if (data[n]['ISBN'] === i['ISBN']) {
-                console.log(n)
                 remaining.push(data[n])
             }
         });
     } else {
         let book = {
+            isbn: i['ISBN'],
             title: gresp.data.items[0].volumeInfo.title, 
             author: gresp.data.items[0].volumeInfo.authors, 
             publisher: gresp.data.items[0].volumeInfo.publisher,
             genre: "",
             distributor: "",
-            price: i['List Price'],
+            price: i['List Price'].replace(/\D/g,''),
             image_url: "",
             category: i['Category']
          };
-         collection.push(book)
+
+         let stock = {
+            book: book,
+            count: 1,
+         };
+         addtocollection("books", book, i['ISBN'])
+         addtocollection("inStock", stock, i['ISBN'])
+        //  console.log(translateText(gresp.data.items[0].volumeInfo.title, 'hi'))
     }
 }
-console.log(remaining.length)
-console.log(collection)
-
 
 //   // [START thumbnailGeneration]
 //   // Download file from bucket.
