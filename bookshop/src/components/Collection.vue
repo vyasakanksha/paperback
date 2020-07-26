@@ -24,17 +24,14 @@
 </template>
 
 <script>
+  import { inStockCollection} from '@/firebase'
   export default {
     data() {
       return {
         fields: [ // A column that needs custom formatting
           {key: 'image', label: ''},
-          'name', 'author', 'price'],
-        items: [
-          { name: "Mrs Warren's Profession", author: 'Shaw', price: 399, image: 'https://s3.amazonaws.com/kimicoapps-bookbuddy/CB3AEBFE-771D-4A63-B30C-E6B2C028857C'},
-          { name: "Cats", author: 'Larsen', price: 599 },
-          { name: "100 Years of Solitude", author: 'Gabriel García Márquez', price: 200 }
-        ],
+          'title', 'author', 'price'],
+        items: [],
         tableVariants: [
           'primary',
           'secondary',
@@ -58,6 +55,20 @@
         tableVariant: '',
         noCollapse: false
       }
+    },
+    async created() {
+      console.log("this", this.val)
+      const docs = await inStockCollection.get()
+      docs.forEach(doc => {
+        let b = {
+          'title': doc.data().book.title,
+          'author': doc.data().book.author ? doc.data().book.author[0] : "",
+          'price': doc.data().book.price,
+          'image': "",
+        }
+        console.log(b)
+        this.items.push(b)
+      })
     },
     name: "Collection"
     // props: {
@@ -88,5 +99,6 @@ a {
     vertical-align: middle;
     padding: 12px;
     border: 1px red dotted;
+    height: 100%;
 }
 </style>
