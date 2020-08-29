@@ -1,6 +1,8 @@
 // [START import]
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const db = admin.firestore();
+
 
 /**
  * When an image is uploaded in the Storage bucket We generate a thumbnail automatically using
@@ -8,7 +10,7 @@ const admin = require("firebase-admin");
  * After the thumbnail has been generated and uploaded to Cloud Storage,
  * we write the public URL to the Firebase Realtime Database.
  */
-exports.generateThumbnail = functions.storage
+exports.generateThumbnail = functions.region("asia-east2").storage
   .object()
   .onFinalize(async (object) => {
     // Max height and width of the thumbnail in pixels.
@@ -104,7 +106,8 @@ exports.generateThumbnail = functions.storage
     };
     // Add the URLs to the Database
     // To update image
-    db.collection("booksCollection")
+    console.log("Update cloud storage for collection", fileDir)
+    db.collection(fileDir)
       .doc(isbn)
       .update({
         image: admin.firestore.FieldValue.arrayUnion(image),
