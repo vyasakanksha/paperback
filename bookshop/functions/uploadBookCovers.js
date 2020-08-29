@@ -6,12 +6,12 @@ const admin = require("firebase-admin");
  * is externally hosted, it is taken from there and uploaded to gcp
  * The filename of the book cover is uodated in cloud datastore
  */
-exports.uploadBookCovers = functions.firestore
+exports.uploadBookCovers = functions.region("asia-east2").firestore
   .document("{collection}/{isbn}")
   .onWrite(async (change, context) => {
 
     // Downloads an image from an external url uploads it to cloud storage and return the filename
-    async function uploadsgcp(url, isbn) {
+    async function uploadsgcp(urllist, isbn, collection) {
       const path = require("path");
       const os = require("os");
 
@@ -21,27 +21,35 @@ exports.uploadBookCovers = functions.firestore
       console.log("url", url);
       console.log("filePath", tempLocalFile);
 
-      filename = await downloadImage(url, tempLocalFile, fname, upload);
+      filename = await downloadImage(urllist, tempLocalFile, fname, collection, upload);
       return filename;
     }
 
     // Download helper function
-    async function downloadImage(url, dest, name, callback) {
+    async function downloadImage(urllist, dest, name, collection, callback) {
       "use strict";
       const fs = require("fs");
       const axios = require("axios");
 
       // TO DO: Make the axios call once
 
-      // Read the file to get the filename
-      const res = await axios({
-        url,
-        method: "GET",
-      });
-      var filename = name + "." + res.headers["content-type"].split("/")[1];
+      // Read the file to get the filename. Assume .jpg as default if content type empty
+      content_header = undefined
+      for(var url in urllist) {
+        if (content_header === undefined) {
+          const res = await axios({
+            url,
+            method: "GET",
+          });
+
+          content_header = res.headers["content-type"]
+        }
+      }
+
+      var filename = name + "." + content_header.split("/")[1];
 
       const writer = fs.createWriteStream(dest).on("close", function() {
-        callback(dest, filename);
+        callback(dest, filename, collection);
       });
 
       // Read the file to get the stream
@@ -62,18 +70,23 @@ exports.uploadBookCovers = functions.firestore
     }
 
     // Upload helper function
-    var upload = async function(tempLocalFile, filename) {
-      console.log("Begining Upload");
+    var upload = async function(tempLocalFile, filename, collection) {
+      console.log("Beginning Upload");
       const bucket = admin
         .storage()
-        .bucket("gs://paperback-books-7652f.appspot.com/");
+        .bucket("gs://paperback-books-7652f.appspot.com");
       await bucket.upload(tempLocalFile, {
-        destination: filename,
+        destination: path.join(collection, filename),
       });
       console.log("File uploaded to Storage at", filename);
     };
 
     // Main Code
+    const path = require("path");
+    console.log("Collection", context.resource.name)
+    path_parts = context.resource.name.split('/documents/')[1].split('/')
+    collection_path = path_parts[0]
+
     isbn = context.params.isbn;
     data = change.after.data();
     console.log("source", data["source"]);
@@ -81,29 +94,20 @@ exports.uploadBookCovers = functions.firestore
 
     // External hosting of cover images is based on source
     if (data["source"] === "bookbuddy") {
-      if (data["imageraw"] === "") {
+      if (data["imageraw"] === []) {
 
         // When the image is missing we get it from an external API 
         // TO DO: Pull this logic out and make it modular
-        data["imageraw"] =
-          "http://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg" !== ""
-            ? "http://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg"
-            : "http://books.google.com/books/content?id=" +
-              googleID +
-              "&printsec=frontcover&img=1&zoom=1&source=gbs_api";
+        data["imageraw"].push("http://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg")
+        data["imageraw"].push("http://books.google.com/books/content?id=" +
+        googleID +
+        "&printsec=frontcover&img=1&zoom=1&source=gbs_api")
       }
 
-      console.log("url", data["imageraw"]);
-      fname = await uploadsgcp(data["imageraw"], isbn);
+      fname = await uploadsgcp(data["imageraw"], isbn, collection_path);
     } else {
       console.log("The image is not an a url");
       fname = path.dirname(data[d]["imageraw"])
     }
-
-    // This structure will contain the thumbnail URL when it is generated
-    image = {
-      filename: fname,
-    };
-    data["image"].push(image);
-    console.log("image", image);
+    console.log("image", fname);
   });
