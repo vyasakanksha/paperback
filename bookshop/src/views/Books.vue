@@ -1,10 +1,8 @@
 <template>
   <div>
     <NavBar/>
-    <div>
-      <SubNavBar/>
-    </div>
     <div class="books">
+      <HelloWorld/>
       <Collection/>
     </div>
   </div>
@@ -12,9 +10,12 @@
 
 <script>
 // @ is an alias to /src
-import Collection from "@/components/Collection.vue";
+// import Collection from "@/components/Collection.vue";
 import NavBar from "@/components/NavBar.vue";
-import SubNavBar from "@/components/SubNavBar.vue";
+// import SubNavBar from "@/components/SubNavBar.vue";
+import HelloWorld from "@/components/HelloWorld.vue";
+import Collection from '../components/Collection.vue';
+
 
 
 
@@ -23,7 +24,8 @@ export default {
   components: {
     Collection,
     NavBar,
-    SubNavBar
+    // SubNavBar,
+    HelloWorld
   }
 };
 </script>
