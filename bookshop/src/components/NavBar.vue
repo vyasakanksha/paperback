@@ -1,29 +1,18 @@
 <template>
-  <div>
-    <b-navbar toggleable="lg" type="dark" variant="info">
-      <b-navbar-brand href="#">Paperback Bookshop</b-navbar-brand>
-
-      <b-navbar-toggle target="nav-collapse"></b-navbar-toggle>
-
-      <b-collapse id="nav-collapse" is-nav>
-        <b-navbar-nav>
-          <b-nav-item href="#">Blog</b-nav-item>
-        </b-navbar-nav>
-
-        <!-- Right aligned nav items -->
-        <b-navbar-nav class="ml-auto">
-          <b-nav-item-dropdown right>
-            <!-- Using 'button-content' slot -->
-            <template v-slot:button-content>
-              <em>User</em>
-            </template>
-            <b-dropdown-item href="#">Profile</b-dropdown-item>
-            <b-dropdown-item href="#">Sign Out</b-dropdown-item>
-          </b-nav-item-dropdown>
-        </b-navbar-nav>
-      </b-collapse>
-    </b-navbar>
-  </div>
+  <v-app-bar app dark class="indigo">
+    <v-toolbar-title class="headline text-uppercase">
+      <span>Paperback Bookshop &nbsp;</span>
+      <span class="font-weight-light">ADMIN</span>
+    </v-toolbar-title>
+    <v-spacer></v-spacer>
+    <v-btn
+      text
+      href="#"
+      target="_blank"
+    >
+      <span class="mr-2">Home</span>
+    </v-btn>
+  </v-app-bar>
 </template>
 
 <script>

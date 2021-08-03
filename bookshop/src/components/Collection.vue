@@ -1,74 +1,99 @@
 <template>
-  <div>
-    <b-table responsive sticky-header class="table align-middle"
-      :striped="striped"
-      :bordered="bordered"
-      :borderless="borderless"
-      :outlined="outlined"
-      :small="small"
-      :hover="hover"
-      :dark="dark"
-      :fixed="fixed"
-      :foot-clone="footClone"
-      :no-border-collapse="noCollapse"
-      :items="items"
-      :fields="fields"
-      :head-variant="headVariant"
-      :table-variant="tableVariant"
-    >
-      <template v-slot:cell(image)="data">
-        <img :src="`${data.item.image}`" class="img-thumbnail img-fluid" alt="Responsive image" width="100" height="160">
+  <div id="app">
+    <v-app id="paperback">
+      <div>
+        <v-dialog v-model="dialog" max-width="500px">
+        <v-card>
+            <v-card-title>
+            <span class="headline">{{ formTitle }}</span>
+            </v-card-title>
+            <v-card-text>
+            <v-container grid-list-md>
+                <v-layout wrap>
+                <v-flex xs12 sm6 md4>
+                    <v-text-field v-model="items.title" label="Title"></v-text-field>
+                </v-flex>
+                <v-flex xs12 sm6 md4>
+                    <v-text-field v-model="editedItem.author" label="Author"></v-text-field>
+                </v-flex>
+                <v-flex xs12 sm6 md4>
+                    <v-text-field v-model="editedItem.englishTitle" label="English Title"></v-text-field>
+                </v-flex>
+                </v-layout>
+            </v-container>
+            </v-card-text>
+            <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn color="blue darken-1" flat @click.native="close">Cancel</v-btn>
+            <v-btn color="blue darken-1" flat @click.native="save">Save</v-btn>
+            </v-card-actions>
+        </v-card>
+        </v-dialog>
+        
+        <v-data-table :headers="headers" :items="items" class="elevation-1">
+        <template v-slot:items.title="{ item }">
+        <v-simple-checkbox
+          v-model="item.title"
+          disabled
+        ></v-simple-checkbox>
       </template>
-    </b-table>
+        </v-data-table>
+      </div>
+    </v-app>
   </div>
 </template>
 
 <script>
-  import { inStockCollection} from '@/firebase'
+  import { hindiCollection } from '@/firebase'
   export default {
     data() {
       return {
-        fields: [ // A column that needs custom formatting
-          {key: 'image', label: ''},
-          'title', 'author', 'price'],
-        items: [],
-        tableVariants: [
-          'primary',
-          'secondary',
-          'info',
-          'danger',
-          'warning',
-          'success',
-          'light',
-          'dark'
+        dialog: false,
+
+        headers: [ // A column that needs custom formatting
+          {value: 'image', text: ''},
+          {value: 'title', text: 'Title'},{value: 'author', text: 'Author'}
         ],
-        striped: true,
-        bordered: false,
-        borderless: true,
-        outlined: false,
-        small: false,
-        hover: true,
-        dark: false,
-        fixed: false,
-        footClone: false,
-        headVariant: null,
-        tableVariant: '',
-        noCollapse: false
+        items: [],
+        editedIndex: -1,
+        editedItem: {
+            title: '',
+            author: 0,
+            englishTitle: 0,
+        },
+        defaultItem: {
+            title: '',
+            author: 0,
+            englishTitle: 0,
+        },
+        listPrimitive: null
       }
     },
     async created() {
-      console.log("this", this.val)
-      const docs = await inStockCollection.get()
+      const docs = await hindiCollection.get()
+      console.log(docs)
       docs.forEach(doc => {
+        console.log(doc.data())
         let b = {
-          'title': doc.data().book.title,
-          'author': doc.data().book.author ? doc.data().book.author[0] : "",
-          'price': doc.data().book.price,
-          'image': "",
+          'title': doc.data().name,
+          'author': doc.data().author,
+          // 'price': doc.data().price,
+          // 'image': doc.data().imageURL,
         }
         console.log(b)
         this.items.push(b)
       })
+    },
+    computed: {
+    formTitle() {
+        return this.editedIndex === -1 ? 'New Item' : 'Edit Item'
+      }
+    },
+
+    watch: {
+        dialog(val) {
+            val || this.close()
+        }
     },
     name: "Collection"
     // props: {
