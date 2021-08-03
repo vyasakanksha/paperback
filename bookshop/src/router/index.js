@@ -2,6 +2,7 @@ import Vue from "vue";
 import VueRouter from "vue-router";
 import Home from "../views/Home.vue";
 import Books from "../views/Books.vue";
+import Admin from "../views/Admin.vue";
 
 import { auth } from '../firebase'
 
@@ -21,11 +22,10 @@ const routes = [
   {
     path: "/admin",
     name: "Admin",
-    component: () =>
-      import("../views/Books.vue"),
-    meta: {
-        requiresAuth: true
-    }
+    component: Admin,
+    // meta: {
+    //     requiresAuth: true
+    // }
   }
 ];
 

@@ -2,13 +2,15 @@ import Vue from 'vue'
 import App from './App.vue'
 import router from './router'
 import { auth } from './firebase'
-import { BootstrapVue} from 'bootstrap-vue'
 
-// Install BootstrapVue
-Vue.use(BootstrapVue)
+import Vuetify from "vuetify";
+import "vuetify/dist/vuetify.min.css";
 
-import 'bootstrap/dist/css/bootstrap.css'
-import 'bootstrap-vue/dist/bootstrap-vue.css'
+Vue.use(Vuetify);
+
+new Vue({
+  vuetify : new Vuetify(),
+});
 
 Vue.config.productionTip = false
 
@@ -17,7 +19,12 @@ auth.onAuthStateChanged(() => {
   if (!app) {
     app = new Vue({
       router,
+      // store,
+      vuetify: new Vuetify(),
       render: h => h(App)
-    }).$mount('#app')
+    }).$mount('#app')    
   }
 })
+
+export default new Vuetify({})
+
