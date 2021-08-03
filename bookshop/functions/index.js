@@ -1,8 +1,22 @@
 // [START import]
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-admin.initializeApp();
+
+var serviceAccount = require("./paperbackcollective-d7e6e4cbfcb5.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: "https://paperbackcollective-default-rtdb.asia-southeast1.firebasedatabase.app"
+});
+
 const db = admin.firestore();
+
+const thumb = require('./generateThumbnail')
+exports.generateThumbnail = thumb.generateThumbnail;
+
+const upload = require('./uploadBookCovers');
+const { count } = require("console");
+exports.uploadBookCovers = upload.uploadBookCovers;
 
 
 db.settings({ ignoreUndefinedProperties: true });
@@ -11,14 +25,9 @@ db.settings({ ignoreUndefinedProperties: true });
 
 const runtimeOpts = {
   timeoutSeconds: 540,
-  memory: "128MB"
+  memory: "1GB",
 };
 
-// async function asyncForEach(array, callback) {
-//   for (let index = 0; index < array.length; index++) {
-//     await callback(array[index], index, array);
-//   }
-// }
 
 const extractFields = [
   "ISBN",
@@ -29,186 +38,224 @@ const extractFields = [
   "Image URL",
   "Category",
   "List Price",
-  "Source"
+  "Source",
+  "Google VolumeID"
 ];
 
-// function addtocollection(collection, item, key) {
-//   var docRef = db.collection(collection).doc(key);
+function addtocollection(collection, item, key) {
+  console.log(key)
+  var docRef = db.collection('hindiCollection').doc(key);
+  console.log(docRef)
 
-//   docRef
-//     .get()
-//     .then(function(doc) {
-//       if (doc.exists) {
-//         if (collection === "inStock") {
-//           db.collection(collection)
-//             .doc(key)
-//             .update({
-//               count: doc.data().count + 1,
-//             });
-//         }
-//       } else {
-//         // doc.data() will be undefined in this case
-//         db.collection(collection)
-//           .doc(key)
-//           .set(item)
-//           .then(function() {
-//             console.log("Document successfully written!");
-//           });
-//       }
-//     })
-//     .catch(function(error) {
-//       console.log("Error getting document:", error);
-//     });
-// }
-
-// exports.uploadBooks = functions
-//   .runWith(runtimeOpts)
-//   .https.onRequest(async (req, res) => {
-//     parsedData = [];
-//     data = [];
-//     temp = {};
-
-//     const dir = "./rawFiles";
-//     const files = fs.readdirSync(dir);
-
-//     async function readfiles(files, dir) {
-//       data = [];
-//       for (file of files) {
-//         console.log(file);
-//         var tempData = await csvtojson().fromFile(path.join(dir, file));
-//         data.push(...tempData);
-//       }
-//     }
-//     await readfiles(files, dir);
-//     for (let d in data) {
-//       if (data[d]["Source"] == "bookbuddy") {
-//         console.log(data[d]["Image URL"]);
-//       }
-//       parsedData.push(parseData(data[d], extractFields));
-//     }
-
-//     function parseData(data, extractFields) {
-//       extractFields.map((nm) => {
-//         temp[nm] = data[nm];
-//       });
-//       fields = Object.values(temp);
-//       b = new book.Book(
-//         fields[0],
-//         fields[1],
-//         fields[2],
-//         fields[3],
-//         fields[4],
-//         fields[5],
-//         fields[6],
-//         fields[7],
-//         fields[8]
-//       );
-//     }
-//   });
-
-// Max height and width of the thumbnail in pixels.
-const THUMB_MAX_HEIGHT = 160;
-const THUMB_MAX_WIDTH = 107;
-// Thumbnail prefix added to file names.
-const THUMB_DIR = "thumbnail";
-const THUMB_PREFIX = "thumb_";
-
-
-/**
- * When an image is uploaded in the Storage bucket We generate a thumbnail automatically using
- * ImageMagick.
- * After the thumbnail has been generated and uploaded to Cloud Storage,
- * we write the public URL to the Firebase Realtime Database.
- */
-exports.generateThumbnail = functions.storage
-  .object()
-  .onFinalize(async object => {
-    const path = require("path");
-    // const csvtojson = require("csvtojson");
-    const fs = require("fs");
-    // var book = require("./Book");
-    const mkdirp = require("mkdirp");
-    const spawn = require("child-process-promise").spawn;
-    const os = require("os");
-
-    // File and directory paths.
-    const filePath = object.name;
-    const contentType = object.contentType; // This is the image MIME type
-    const fileDir = path.dirname(filePath);
-    const fileName = path.basename(filePath);
-    const thumbFilePath = path.normalize(
-      path.join(fileDir, `${THUMB_PREFIX}${fileName}`)
-    );
-    const tempLocalFile = path.join(os.tmpdir(), filePath);
-    const tempLocalDir = path.dirname(tempLocalFile);
-    const tempLocalThumbFile = path.join(os.tmpdir(), thumbFilePath);
-
-    // Exit if this is triggered on a file that is not an image.
-    if (!contentType.startsWith("image/")) {
-      return console.log("This is not an image.");
-    }
-
-    // Exit if the image is already a thumbnail.
-    if (fileName.startsWith(THUMB_PREFIX)) {
-      return console.log("Already a Thumbnail.");
-    }
-
-    // Cloud Storage files.
-    const bucket = admin.storage().bucket(object.bucket);
-    const file = bucket.file(filePath);
-    const metadata = {
-      contentType: contentType
-      // To enable Client-side caching you can set the Cache-Control headers here. Uncomment below.
-      // 'Cache-Control': 'public,max-age=3600',
-    };
-
-    // Create the temp directory where the storage file will be downloaded.
-    await mkdirp(tempLocalDir);
-    // Download file from bucket.
-    await file.download({ destination: tempLocalFile });
-    console.log("The file has been downloaded to", tempLocalFile);
-    // Generate a thumbnail using ImageMagick.
-    await spawn(
-      "convert",
-      [
-        tempLocalFile,
-        "-strip",
-        "-auto-orient",
-        "-thumbnail",
-        `${THUMB_MAX_WIDTH}x${THUMB_MAX_HEIGHT}>`,
-        tempLocalThumbFile
-      ],
-      { capture: ["stdout", "stderr"] }
-    );
-    console.log("Thumbnail created at", tempLocalThumbFile);
-    // Uploading the Thumbnail.
-    const thumbRemoteFilePath = path.normalize(
-        path.join(fileDir, THUMB_DIR, `${THUMB_PREFIX}${fileName}`)
-      );
-    const thumbFile = bucket.file(thumbRemoteFilePath);
-    await bucket.upload(tempLocalThumbFile, {
-      destination: thumbRemoteFilePath,
-      metadata: metadata
+  docRef
+    .get()
+    .then(function(doc) {
+      if (doc.exists) {
+      db.collection(collection)
+        .doc(key)
+        .update({
+          count: doc.data().count + 1,
+        })
+        .then(function() {
+            console.log("Document successfully updated!", key);
+            return
+          });
+      } else {
+        // doc.data() will be undefined in this case
+        db.collection(collection)
+          .doc(key)
+          .set(item)
+          .then(function() {
+            console.log("Document successfully written!", key);
+            return
+          });
+      }
+      return
+    })
+    .catch(function(error) {
+      console.log("Error getting document:", error);
     });
-    console.log("Thumbnail uploaded to Storage at", thumbFilePath);
-    // Once the image has been uploaded delete the local files to free up disk space.
-    fs.unlinkSync(tempLocalFile);
-    fs.unlinkSync(tempLocalThumbFile);
-    // Get the Signed URLs for the thumbnail and original image.
-    const config = {
-      action: "read",
-      expires: "03-01-2500"
-    };
-    const results = await Promise.all([
-      thumbFile.getSignedUrl(config),
-      file.getSignedUrl(config)
-    ]);
-    console.log("Got Signed URLs.");
-    const thumbResult = results[0];
-    const originalResult = results[1];
-    const thumbFileUrl = thumbResult[0];
-    const fileUrl = originalResult[0];
-    // Add the URLs to the Database
-    await admin.database().ref('images').push({path: fileUrl, thumbnail: thumbFileUrl});
-    return console.log("Thumbnail URLs saved to database.", thumbFileUrl);
+}
+
+exports.uploadBooks = functions
+  .runWith(runtimeOpts)
+  .https.onRequest(async (req, res) => {
+    const path = require("path");
+    const csvtojson = require("csvtojson");
+    const fs = require("fs");
+    const spawn = require("child-process-promise").spawn;
+
+    parsedData = [];
+    data = [];
+    temp = {};
+    books = [];
+
+    const dir = "./rawFiles";
+    const files = fs.readdirSync(dir);
+
+    async function readfiles(files, dir) {
+      data = [];
+      for (file of files) {
+        console.log(file);
+        var tempData = await csvtojson().fromFile(path.join(dir, file));
+        data.push(...tempData);
+      }
+    }
+    await readfiles(files, dir);
+
+    for(var d in data) {
+      parsedData.push(parseData(data[d], extractFields));
+    }
+
+    // for (let i = 20; i< 50; i++) {
+    //   console.log("Adding to collection", i, books[i])
+    //   addtocollection("hindiCollection", books[i], books[i].isbn)
+    // }
+
+    for (b in books) {
+        console.log("Adding to collection", books[b])
+        addtocollection("hindiCollection", books[b], books[b].isbn)
+    }
+
+    function parseData(data, extractFields) {
+      extractFields.map((nm) => {
+        temp[nm] = data[nm];
+      });
+      fields = Object.values(temp);
+
+      b = {
+        timestamp: Date.now(),
+        isbn: fields[0],
+        name: fields[1],
+        author: fields[2],
+        publisher: fields[3],
+        dateAdded: fields[4],
+        imageraw: fields[5],
+        image: [],
+        price: fields[7],
+        source: fields[8],
+        googleID: fields[9],
+        count: 1
+      };
+
+      books.push(b);
+    }
+    return;
+});
+
+exports.uploadWIXBooks = functions
+  .runWith(runtimeOpts)
+  .https.onRequest(async (req, res) => {
+    const path = require("path");
+    const csvtojson = require("csvtojson");
+    const fs = require("fs");
+    const spawn = require("child-process-promise").spawn;
+
+    parsedData = [];
+    data = [];
+    temp = {};
+    books = [];
+
+    const file = "HindiCollection.csv";
+
+    async function readfiles(file) {
+      data = [];
+      console.log(file);
+      var tempData = await csvtojson().fromFile(file);
+      data.push(...tempData);
+    }
+    await readfiles(file);
+
+    // console.log(data)
+
+    for(var d in data) {
+      parsedData.push(parseData(data[d], extractFields));
+    }
+
+    // for(var b in books) {
+    //   console.log(b)
+    //   console.log("Adding to collection", b.isbn, b)
+    //   addtocollection("hindiCollection", b, b.isbn)
+    // }
+
+    for (b in books) {
+        console.log("Adding to collection", books[b])
+        addtocollection("hindiCollection", books[b], books[b].isbn)
+    }
+
+    function parseData(data) {
+      b = {
+        timestamp: Date.now(),
+        isbn: data.isbn,
+        name: data.name,
+        author: data.collection,
+        imageURL: data.productImageUrl,
+        price: data.price,
+      };
+
+      books.push(b);
+    }
+    return;
+});
+
+
+exports.downloadBooks = functions
+  .runWith(runtimeOpts)
+  .https.onRequest(async (req, res) => {
+    const fs = require("fs");
+
+    const documents = [];
+
+    async function getBooks(documents) {
+      const snapshot = await db.collection('hindiCollection').get()
+      snapshot.forEach(doc => {
+         documents[doc.id] = doc.data();
+      });
+      return documents;
+    }
+
+    await getBooks(documents)
+
+    wixDocuments = []
+    for (d in documents) {
+      wix = {
+        handleId: documents[d]['isbn'],
+        fieldType: 'Product',
+        name: documents[d]['name'].replace(',', '-'),
+        description: documents[d]['name'].replace(',', '-') + ' - ' + documents[d]['author'].replace(',', '-'),
+        productImageUrl: documents[d]['image'][0] != undefined ? documents[d]['image'][0]['thumb_url'].split('?')[0] : documents[d]['imageraw'],
+        collection: documents[d]['author'],
+        isbn: documents[d]['isbn'],
+        price: documents[d]['price'],
+        visible: 'TRUE',
+        inventory: documents[d]['count'],
+        additionalInfoTitle1: 'Written By ' + documents[d]['author'].replace(',', '-'),
+        additionalInfoDescription1: documents[d]['name'].replace(',', '-') + ' - ' + documents[d]['author'].replace(',', '-'),
+      };
+      wixDocuments.push(wix)
+    }
+
+    function writeToCSVFile(documents) {
+      const filename = 'wixHindiCollection1.csv';
+      fs.writeFile(filename, extractAsCSV(documents), err => {
+        if (err) {
+          console.log('Error writing to csv file', err);
+        } else {
+          console.log(`saved as ${filename}`);
+        }
+      });
+    }
+    
+    function extractAsCSV(documents) {
+      const header = ["handleId, fieldType, name, description, productImageUrl, collection, isbn, price, visible, inventory, additionalInfoTitle1, additionalInfoDescription1"];
+      const rows = documents.map(documents =>
+         `${documents.handleId}, ${documents.fieldType}, ${documents.name}, ${documents.description}, ${documents.productImageUrl}, ${documents.collection}, ${documents.isbn}, ${documents.price}, ${documents.visible}, ${documents.inventory}, ${documents.additionalInfoTitle1}, ${documents.additionalInfoDescription1}`
+      );
+      return header.concat(rows).join("\n");
+    }
+
+    writeToCSVFile(wixDocuments)
+
+    console.log(wixDocuments)
+
   });

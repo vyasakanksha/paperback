@@ -1,12 +1,17 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 
+const runtimeOpts = {
+  timeoutSeconds: 540,
+  memory: "1GB",
+};
+
 /**
  * When a new book is added to the cloud datastore from a source where the book cover photo
  * is externally hosted, it is taken from there and uploaded to gcp
  * The filename of the book cover is uodated in cloud datastore
  */
-exports.uploadBookCovers = functions.region("asia-east2").firestore
+exports.uploadBookCovers = functions.runWith(runtimeOpts).region("asia-east2").firestore
   .document("{collection}/{isbn}")
   .onWrite(async (change, context) => {
 
@@ -18,7 +23,7 @@ exports.uploadBookCovers = functions.region("asia-east2").firestore
       fname = isbn.replace(/ /g, "");
 
       const tempLocalFile = path.join(os.tmpdir(), fname);
-      console.log("url", url);
+      console.log("url", urllist);
       console.log("filePath", tempLocalFile);
 
       filename = await downloadImage(urllist, tempLocalFile, fname, collection, upload);
@@ -34,18 +39,30 @@ exports.uploadBookCovers = functions.region("asia-east2").firestore
       // TO DO: Make the axios call once
 
       // Read the file to get the filename. Assume .jpg as default if content type empty
-      content_header = undefined
-      for(var url in urllist) {
-        if (content_header === undefined) {
-          const res = await axios({
-            url,
+      
+      async function fetchImage(url) {
+        var content_header = undefined
+
+        console.log("START FETCH URL:", url, url)
+          const response = await axios({
+            url: url,
             method: "GET",
-          });
-
-          content_header = res.headers["content-type"]
+          })
+          if(response.headers["content-type"] !== undefined) {
+            console.log("SUCCESS:", url)
+            content_header = response.headers["content-type"]
+            console.log("RETUREN:", url, content_header)
+            return content_header
+          }
         }
-      }
 
+      let url = urllist[0]
+      let content_header = await fetchImage(url);
+      if(content_header === undefined) {
+        url = urllist[1]
+        content_header = await fetchImage(url);
+      }
+      console.log("Finalurl", url, content_header)
       var filename = name + "." + content_header.split("/")[1];
 
       const writer = fs.createWriteStream(dest).on("close", function() {
@@ -94,17 +111,20 @@ exports.uploadBookCovers = functions.region("asia-east2").firestore
 
     // External hosting of cover images is based on source
     if (data["source"] === "bookbuddy") {
-      if (data["imageraw"] === []) {
+      if (data["imageraw"] === "") {
 
         // When the image is missing we get it from an external API 
         // TO DO: Pull this logic out and make it modular
-        data["imageraw"].push("http://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg")
-        data["imageraw"].push("http://books.google.com/books/content?id=" +
-        googleID +
+        data["image"].push("http://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg")
+        data["image"].push("http://books.google.com/books/content?id=" +
+        data["googleID"] +
         "&printsec=frontcover&img=1&zoom=1&source=gbs_api")
       }
-
-      fname = await uploadsgcp(data["imageraw"], isbn, collection_path);
+      else {
+        data["image"].push(data["imageraw"])
+      }
+      console.log("IMAGE!", data["image"])
+      fname = await uploadsgcp(data["image"], isbn, collection_path);
     } else {
       console.log("The image is not an a url");
       fname = path.dirname(data[d]["imageraw"])

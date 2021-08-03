@@ -3,6 +3,10 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const db = admin.firestore();
 
+const runtimeOpts = {
+  timeoutSeconds: 540,
+  memory: "1GB",
+};
 
 /**
  * When an image is uploaded in the Storage bucket We generate a thumbnail automatically using
@@ -10,7 +14,7 @@ const db = admin.firestore();
  * After the thumbnail has been generated and uploaded to Cloud Storage,
  * we write the public URL to the Firebase Realtime Database.
  */
-exports.generateThumbnail = functions.region("asia-east2").storage
+exports.generateThumbnail = functions.runWith(runtimeOpts).region("asia-east2").storage
   .object()
   .onFinalize(async (object) => {
     // Max height and width of the thumbnail in pixels.
@@ -114,6 +118,8 @@ exports.generateThumbnail = functions.region("asia-east2").storage
       })
       .then(function() {
         console.log("Document successfully updated!");
+        console.log("ISBN!", isbn);
+        console.log("image!", image);
         return;
       })
       .catch(function() {
