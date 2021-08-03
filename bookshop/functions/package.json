@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "async-request": "^1.2.0",
-    "axios": "^0.19.2",
+    "axios": "^0.21.1",
     "child-process-promise": "^2.2.1",
     "firebase-admin": "^8.10.0",
     "firebase-functions": "^3.6.1",
